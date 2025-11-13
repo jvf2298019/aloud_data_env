@@ -1,0 +1,80 @@
+# Configurações Gerais do Projeto
+
+# Caminhos de dados
+data:
+  raw_path: ../data/raw
+  interim_path: ../data/interim
+  processed_path: ../data/processed
+  
+# Configurações de modelagem
+models:
+  random_seed: 42
+  test_size: 0.2
+  cv_folds: 5
+  n_jobs: -1
+
+# Configurações de visualização
+visualization:
+  style: seaborn
+  palette: husl
+  figsize: [10, 6]
+  dpi: 300
+  save_format: png
+
+# Configurações de banco de dados
+database:
+  # Use variáveis de ambiente para credenciais sensíveis
+  connection_timeout: 30
+  pool_size: 5
+  echo: false
+
+# Configurações de APIs
+api:
+  timeout: 30
+  max_retries: 3
+  retry_delay: 1.0
+
+# Logging
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: logs/app.log
+
+# Feature Engineering
+features:
+  scaling_method: standard  # standard, minmax, robust
+  encoding_method: onehot   # onehot, label, target
+
+# Hiperparâmetros padrão
+hyperparameters:
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 2
+    min_samples_leaf: 1
+  
+  gradient_boosting:
+    n_estimators: 100
+    learning_rate: 0.1
+    max_depth: 3
+  
+  logistic_regression:
+    C: 1.0
+    max_iter: 1000
+    solver: lbfgs
+
+# Métricas de avaliação
+metrics:
+  classification:
+    - accuracy
+    - precision
+    - recall
+    - f1_score
+    - roc_auc
+  
+  regression:
+    - r2_score
+    - mean_squared_error
+    - mean_absolute_error
+    - root_mean_squared_error
+
