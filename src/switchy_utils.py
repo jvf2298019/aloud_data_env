@@ -791,4 +791,3 @@ def update_link_rotator(link_id: str, extra_urls: List[str]) -> Dict:
     """
     api = SwitchyAPI()
     return api.update_link_rotator(link_id, extra_urls)
-

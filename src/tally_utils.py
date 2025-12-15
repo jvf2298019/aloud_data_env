@@ -877,4 +877,3 @@ def get_tally_client() -> Tally:
         >>> forms = tally.get_forms()
     """
     return Tally()
-
