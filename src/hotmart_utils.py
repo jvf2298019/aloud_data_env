@@ -1,4 +1,5 @@
 import os
+import sys
 import requests
 import logging
 from datetime import datetime, timedelta
@@ -277,12 +278,14 @@ class Hotmart:
         """
         url = 'https://developers.hotmart.com/payments/api/v1/sales/history'
         all_items: List[Dict[str, Any]] = []
+        page_number = 0
         
         # Converter datas para timestamp se necessário
         start_date_ts = self._convert_date_to_timestamp(start_date)
         end_date_ts = self._convert_date_to_timestamp(end_date)
 
         while True:
+            page_number += 1
             params = {
                 'max_results': max_results,
                 'page_token': page_token,
@@ -304,6 +307,10 @@ class Hotmart:
             params = {k: v for k, v in params.items() if v is not None}
             
             try:
+                # Mostrar progresso em tempo real
+                sys.stdout.write(f"\rProcessando página {page_number} do histórico de vendas... (Total de itens: {len(all_items)})")
+                sys.stdout.flush()
+                
                 response = self.make_request(url, method='GET', params=params)
                 data = response.json()
                 items = data.get('items', [])
@@ -316,9 +323,14 @@ class Hotmart:
                 page_token = page_info.get('next_page_token')
                 
                 if not page_token:
+                    # Log final com quebra de linha
+                    sys.stdout.write(f"\r✓ Concluído: {page_number} página(s) processada(s). Total de {len(all_items)} itens obtidos.\n")
+                    sys.stdout.flush()
                     break
                     
             except HotmartAPIError as e:
+                sys.stdout.write("\n")  # Quebra de linha antes do erro
+                sys.stdout.flush()
                 logger.error("Erro ao obter histórico de vendas: %s", e)
                 break
 
@@ -363,12 +375,14 @@ class Hotmart:
         """
         url = 'https://developers.hotmart.com/payments/api/v1/sales/users'
         all_items: List[Dict[str, Any]] = []
+        page_number = 0
         
         # Converter datas para timestamp se necessário
         start_date_ts = self._convert_date_to_timestamp(start_date)
         end_date_ts = self._convert_date_to_timestamp(end_date)
 
         while True:
+            page_number += 1
             params = {
                 'max_results': max_results,
                 'page_token': page_token,
@@ -389,6 +403,10 @@ class Hotmart:
             params = {k: v for k, v in params.items() if v is not None}
             
             try:
+                # Mostrar progresso em tempo real
+                sys.stdout.write(f"\rProcessando página {page_number} de participantes... (Total de itens: {len(all_items)})")
+                sys.stdout.flush()
+                
                 response = self.make_request(url, method='GET', params=params)
                 data = response.json()
                 items = data.get('items', [])
@@ -401,9 +419,14 @@ class Hotmart:
                 page_token = page_info.get('next_page_token')
                 
                 if not page_token:
+                    # Log final com quebra de linha
+                    sys.stdout.write(f"\r✓ Concluído: {page_number} página(s) processada(s). Total de {len(all_items)} participantes obtidos.\n")
+                    sys.stdout.flush()
                     break
                     
             except HotmartAPIError as e:
+                sys.stdout.write("\n")  # Quebra de linha antes do erro
+                sys.stdout.flush()
                 logger.error("Erro ao obter participantes: %s", e)
                 break
 
@@ -440,12 +463,14 @@ class Hotmart:
         """
         url = 'https://developers.hotmart.com/payments/api/v1/sales/commissions'
         all_items: List[Dict[str, Any]] = []
+        page_number = 0
         
         # Converter datas para timestamp se necessário
         start_date_ts = self._convert_date_to_timestamp(start_date)
         end_date_ts = self._convert_date_to_timestamp(end_date)
 
         while True:
+            page_number += 1
             params = {
                 'max_results': max_results,
                 'page_token': page_token,
@@ -462,6 +487,10 @@ class Hotmart:
             params = {k: v for k, v in params.items() if v is not None}
             
             try:
+                # Mostrar progresso em tempo real
+                sys.stdout.write(f"\rProcessando página {page_number} de comissões... (Total de itens: {len(all_items)})")
+                sys.stdout.flush()
+                
                 response = self.make_request(url, method='GET', params=params)
                 data = response.json()
                 items = data.get('items', [])
@@ -474,9 +503,14 @@ class Hotmart:
                 page_token = page_info.get('next_page_token')
                 
                 if not page_token:
+                    # Log final com quebra de linha
+                    sys.stdout.write(f"\r✓ Concluído: {page_number} página(s) processada(s). Total de {len(all_items)} comissões obtidas.\n")
+                    sys.stdout.flush()
                     break
                     
             except HotmartAPIError as e:
+                sys.stdout.write("\n")  # Quebra de linha antes do erro
+                sys.stdout.flush()
                 logger.error("Erro ao obter comissões: %s", e)
                 break
 
@@ -525,8 +559,10 @@ class Hotmart:
         
         url = f'https://developers.hotmart.com/club/api/v1/users?subdomain={subdomain}'
         all_items: List[Dict[str, Any]] = []
+        page_number = 0
 
         while True:
+            page_number += 1
             params = {
                 'max_results': max_results,
                 'page_token': page_token,
@@ -542,6 +578,10 @@ class Hotmart:
             params = {k: v for k, v in params.items() if v is not None}
             
             try:
+                # Mostrar progresso em tempo real
+                sys.stdout.write(f"\rProcessando página {page_number} de alunos... (Total de itens: {len(all_items)})")
+                sys.stdout.flush()
+                
                 response = self.make_request(url, method='GET', params=params)
                 data = response.json()
                 items = data.get('items', [])
@@ -554,9 +594,14 @@ class Hotmart:
                 page_token = page_info.get('next_page_token')
                 
                 if not page_token:
+                    # Log final com quebra de linha
+                    sys.stdout.write(f"\r✓ Concluído: {page_number} página(s) processada(s). Total de {len(all_items)} alunos obtidos.\n")
+                    sys.stdout.flush()
                     break
                     
             except HotmartAPIError as e:
+                sys.stdout.write("\n")  # Quebra de linha antes do erro
+                sys.stdout.flush()
                 logger.error("Erro ao obter alunos: %s", e)
                 break
 

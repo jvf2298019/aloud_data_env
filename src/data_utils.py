@@ -200,7 +200,7 @@ def clean_and_lower_column(df: pd.DataFrame, column: str) -> pd.Series:
     return df[column].astype(str).str.strip().str.lower()
 
 
-def process_phone_number(phone: str, default_region: str = 'BR') -> Dict[str, Any]:
+def process_phone_number(phone: str, default_region: str = 'BR', return_type: str = 'COMPLETE') -> Dict[str, Any]:
     """
     Versão ROBUSTA usando python-phonenumbers (baseada na libphonenumber do Google).
     
@@ -307,9 +307,16 @@ def process_phone_number(phone: str, default_region: str = 'BR') -> Dict[str, An
         output['formatted_phone'] = phone
         output['whatsapp_format'] = phone
         output['error'] = f"Unexpected error: {str(e)}"
-    
-    return output
 
+    
+    if return_type == 'COMPLETE':
+        return output
+    elif return_type == 'FORMATTED':
+        return output['formatted_phone']
+    elif return_type == 'WHATSAPP':
+        return output['whatsapp_format']
+    else:
+        raise ValueError(f"Tipo de retorno inválido: {return_type}")
 
 def to_snake_case(name: str) -> str:
     """
@@ -437,3 +444,123 @@ def flatten_list_to_df(
     df = pd.DataFrame(flattened)
     
     return df
+
+
+def timestamp_ms_to_datetime(df: pd.DataFrame, column: str, errors: str = 'coerce') -> pd.Series:
+    """
+    Converte uma coluna de timestamps em milissegundos para objetos datetime.
+    
+    Args:
+        df: DataFrame de entrada
+        column: Nome da coluna com timestamps em milissegundos
+        errors: Como lidar com erros ('raise', 'coerce', 'ignore')
+                - 'raise': lança exceção em caso de erro
+                - 'coerce': converte valores inválidos para NaT
+                - 'ignore': retorna a série original em caso de erro
+        
+    Returns:
+        Series com valores datetime convertidos
+        
+    Examples:
+        >>> df = pd.DataFrame({'timestamp': [1698857976000, 1698857977000, None]})
+        >>> df['datetime'] = timestamp_ms_to_datetime(df, 'timestamp')
+        >>> df['datetime'].dtype
+        dtype('<M8[ns]')
+    """
+    if column not in df.columns:
+        raise ValueError(f"Coluna '{column}' não encontrada no DataFrame")
+    
+    try:
+        # Converte timestamps em milissegundos para datetime
+        # pd.to_datetime com unit='ms' espera valores numéricos
+        return pd.to_datetime(df[column], unit='ms', errors=errors)
+    except Exception as e:
+        if errors == 'raise':
+            raise ValueError(f"Erro ao converter coluna '{column}': {str(e)}")
+        elif errors == 'ignore':
+            return df[column]
+        else:
+            # Para 'coerce' ou qualquer outro valor, tenta novamente com coerce
+            return pd.to_datetime(df[column], unit='ms', errors='coerce')
+
+
+def parse_utm_string(df: pd.DataFrame, column: str, inplace: bool = False) -> pd.DataFrame:
+    """
+    Extrai informações de UTM de strings em múltiplos formatos.
+    
+    Suporta formatos:
+    1. Query string: utm_source=valor&utm_campaign=valor
+    2. URL-encoded: utm_source=valor%26utm_campaign=valor
+    3. Customizado: us:valor|uc:valor|um:valor|s:valor
+    
+    Args:
+        df: DataFrame de entrada
+        column: Nome da coluna contendo as strings de UTM
+        inplace: Se True, modifica o DataFrame original
+        
+    Returns:
+        DataFrame com colunas UTM adicionadas
+    """
+    from urllib.parse import unquote
+    
+    if column not in df.columns:
+        raise ValueError(f"Coluna '{column}' não encontrada no DataFrame")
+    
+    result_df = df if inplace else df.copy()
+    
+    # Mapeamento de abreviações
+    ABBREV = {'us': 'utm_source', 'uc': 'utm_campaign', 'uo': 'utm_content', 
+              'um': 'utm_medium', 'ut': 'utm_term', 's': 'seller'}
+    
+    # Campos de saída
+    FIELDS = ['utm_source', 'utm_campaign', 'utm_content', 'utm_medium', 'utm_term', 'seller', 'campaign_id']
+    
+    def parse_single(val):
+        """Parse uma única string UTM."""
+        out = {f: None for f in FIELDS}
+        
+        # Trata valores vazios/nulos
+        if pd.isna(val):
+            return out
+        s = str(val).strip()
+        if not s or s.upper() in ('NA', 'NAN', 'NONE', ''):
+            return out
+        
+        # Normaliza caracteres especiais
+        s = s.replace('｜', '|').replace('：', ':').replace('＝', '=').replace('＆', '&')
+        
+        # URL decode
+        s = unquote(s)
+        
+        # Tenta formato customizado (us:valor|uc:valor)
+        if ':' in s and '=' not in s:
+            for part in s.split('|'):
+                if ':' in part:
+                    k, v = part.split(':', 1)
+                    k = k.strip().lower()
+                    v = v.strip()
+                    full_key = ABBREV.get(k, k)
+                    if full_key in FIELDS and v:
+                        out[full_key] = v
+        
+        # Tenta formato query string (utm_source=valor&utm_campaign=valor)
+        elif '=' in s:
+            for part in re.split(r'[&]', s):
+                if '=' in part:
+                    k, v = part.split('=', 1)
+                    k = k.strip().lower()
+                    v = v.strip()
+                    if k in FIELDS and v:
+                        out[k] = v
+        
+        return out
+    
+    # Aplica parse e expande para colunas
+    parsed = result_df[column].apply(parse_single)
+    parsed_df = pd.DataFrame(parsed.tolist(), index=result_df.index)
+    
+    # Adiciona colunas ao resultado
+    for field in FIELDS:
+        result_df[field] = parsed_df[field]
+    
+    return result_df

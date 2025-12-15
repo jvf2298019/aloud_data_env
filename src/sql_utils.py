@@ -277,6 +277,34 @@ class DatabaseConnection:
         except Exception as e:
             raise Exception(f"Erro ao executar query: {str(e)}") from e
     
+    def execute_query_from_file(
+        self,
+        query_name: str,
+        params: Optional[Dict[str, Any]] = None,
+        queries_dir: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        Carrega e executa uma query SQL de um arquivo .sql
+        
+        Combina load_query_from_file() + execute_query() em um único método conveniente.
+        
+        Args:
+            query_name: Nome do arquivo da query (com ou sem extensão .sql)
+            params: Parâmetros para a query (opcional)
+            queries_dir: Diretório onde estão os arquivos de queries (opcional)
+            
+        Returns:
+            DataFrame com os resultados da query
+            
+        Example:
+            >>> db = DatabaseConnection()
+            >>> # Executa queries/buscar_usuarios.sql
+            >>> df = db.execute_query_from_file('buscar_usuarios', {"idade": 18})
+            >>> print(df.head())
+        """
+        query = load_query_from_file(query_name, queries_dir)
+        return self.execute_query(query, params)
+    
     def execute_update(
         self,
         query: str,

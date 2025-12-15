@@ -1,4 +1,5 @@
 import os
+import sys
 import requests
 import logging
 from datetime import datetime
@@ -171,6 +172,10 @@ class TMB:
             params = {k: v for k, v in params.items() if v is not None}
             
             try:
+                # Mostrar progresso em tempo real
+                sys.stdout.write(f"\rProcessando página {current_page} de pedidos... (Total de itens: {len(all_pedidos)})")
+                sys.stdout.flush()
+                
                 response = self.make_request('/api/pedidos', method='GET', params=params)
                 data = response.json()
                 
@@ -181,6 +186,9 @@ class TMB:
                     items = data.get('data', [])
                 
                 if not items:
+                    # Log final com quebra de linha
+                    sys.stdout.write(f"\r✓ Concluído: {current_page - 1} página(s) processada(s). Total de {len(all_pedidos)} pedidos obtidos.\n")
+                    sys.stdout.flush()
                     break
                 
                 all_pedidos.extend(items)
@@ -188,11 +196,16 @@ class TMB:
                 
                 # Verificar se há mais páginas
                 if len(items) < page_size:
+                    # Log final com quebra de linha
+                    sys.stdout.write(f"\r✓ Concluído: {current_page} página(s) processada(s). Total de {len(all_pedidos)} pedidos obtidos.\n")
+                    sys.stdout.flush()
                     break
                 
                 current_page += 1
                 
             except TMBAPIError as e:
+                sys.stdout.write("\n")  # Quebra de linha antes do erro
+                sys.stdout.flush()
                 logger.error("Erro ao obter pedidos: %s", e)
                 break
         
