@@ -603,6 +603,53 @@ class DatabaseConnection:
         inspector = inspect(self.engine)
         return inspector.get_table_names()
     
+    def execute_query_from_file(
+        self,
+        query_name: str,
+        params: Optional[Dict[str, Any]] = None,
+        queries_dir: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        Carrega uma query SQL de um arquivo e a executa, retornando os resultados como DataFrame
+        
+        Este método combina load_query_from_file() e execute_query() em uma única chamada,
+        facilitando a execução de queries armazenadas em arquivos .sql.
+        
+        Args:
+            query_name: Nome do arquivo da query (com ou sem extensão .sql)
+            params: Parâmetros para a query (opcional)
+            queries_dir: Diretório onde estão os arquivos de queries (opcional)
+                        Se não especificado, busca automaticamente em:
+                        1. ./queries (se executar da raiz do projeto)
+                        2. ../queries (se executar de dentro de src/ ou notebooks/)
+            
+        Returns:
+            DataFrame com os resultados da query
+            
+        Raises:
+            FileNotFoundError: Se o arquivo da query não for encontrado
+            ValueError: Se o arquivo estiver vazio
+            Exception: Se houver erro na execução da query
+            
+        Example:
+            >>> db = DatabaseConnection()
+            >>> # Executa query do arquivo 'buscar_usuarios.sql'
+            >>> df = db.execute_query_from_file('buscar_usuarios', {"idade": 18})
+            >>> print(df.head())
+            
+            >>> # Especificando diretório customizado
+            >>> df = db.execute_query_from_file(
+            ...     'relatorio_vendas',
+            ...     params={"ano": 2024},
+            ...     queries_dir='/path/to/custom/queries'
+            ... )
+        """
+        # Carrega a query do arquivo
+        query = load_query_from_file(query_name, queries_dir)
+        
+        # Executa a query e retorna o resultado
+        return self.execute_query(query, params)
+    
     def close(self):
         """
         Fecha a conexão com o banco de dados

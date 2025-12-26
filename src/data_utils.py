@@ -437,3 +437,271 @@ def flatten_list_to_df(
     df = pd.DataFrame(flattened)
     
     return df
+
+def _extract_column_values(
+    df: pd.DataFrame, 
+    column: str, 
+    processor: Optional[callable] = None
+) -> set:
+    """
+    Extrai valores únicos de uma coluna, aplicando processamento opcional.
+    
+    Args:
+        df: DataFrame de origem
+        column: Nome da coluna
+        processor: Função para processar a coluna (opcional)
+        
+    Returns:
+        Set com valores únicos processados (exclui NA/NaN)
+    """
+    if column not in df.columns:
+        return set()
+    
+    if processor:
+        processed = processor(df, column)
+    else:
+        processed = df[column]
+    
+    # Remove valores NA/NaN antes de converter para set
+    return set(processed.dropna().tolist())
+
+
+def remove_buyers_from_dataframe(
+    df: pd.DataFrame,
+    email_column: str = 'email',
+    phone_column: str = 'phone',
+    lead_id_column: str = 'lead_id',
+    data_dir: str = '../data/interim'
+) -> pd.DataFrame:
+    """
+    Remove registros de compradores conhecidos de um DataFrame.
+    
+    Carrega dados de compradores de múltiplas fontes e filtra o DataFrame
+    removendo registros que correspondam por email, phone ou lead_id.
+    
+    Args:
+        df: DataFrame a ser filtrado
+        email_column: Nome da coluna de email no DataFrame de entrada
+        phone_column: Nome da coluna de telefone no DataFrame de entrada
+        lead_id_column: Nome da coluna de lead_id no DataFrame de entrada
+        data_dir: Diretório onde estão os arquivos de compradores
+        
+    Returns:
+        DataFrame filtrado sem os compradores conhecidos
+        
+    Raises:
+        ValueError: Se nenhuma das colunas de filtro existir no DataFrame
+        
+    Example:
+        >>> df_leads = pd.DataFrame({
+        ...     'email': ['test@example.com', 'buyer@example.com'],
+        ...     'phone': ['11999999999', '11888888888'],
+        ...     'lead_id': [1, 2]
+        ... })
+        >>> df_filtrado = remove_buyers_from_dataframe(df_leads)
+    """
+    # Validação: verifica se pelo menos uma coluna de filtro existe
+    available_columns = []
+    if email_column in df.columns:
+        available_columns.append(email_column)
+    if phone_column in df.columns:
+        available_columns.append(phone_column)
+    if lead_id_column in df.columns:
+        available_columns.append(lead_id_column)
+    
+    if not available_columns:
+        raise ValueError(
+            f"Nenhuma das colunas de filtro encontrada no DataFrame. "
+            f"Esperado pelo menos uma de: '{email_column}', '{phone_column}', '{lead_id_column}'. "
+            f"Colunas disponíveis: {df.columns.tolist()}"
+        )
+    
+    # Cria cópia para não modificar o original
+    df_filtered = df.copy()
+    
+    # Carrega DataFrames de compradores
+    try:
+        GENERIC_BUYERS_DF = load_raw_data('generic_buyers_data.csv', data_dir=data_dir)
+    except FileNotFoundError:
+        GENERIC_BUYERS_DF = pd.DataFrame()
+    
+    try:
+        HOTMART_BUYERS_DF = load_raw_data('hotmart_sales_history.csv', data_dir=data_dir)
+    except FileNotFoundError:
+        HOTMART_BUYERS_DF = pd.DataFrame()
+    
+    try:
+        TMB_BUYERS_DF = load_raw_data('tmb_buyers_data.csv', data_dir=data_dir)
+    except FileNotFoundError:
+        TMB_BUYERS_DF = pd.DataFrame()
+    
+    try:
+        HOTMART_STUDENTS_DF = load_raw_data('hotmart_students.csv', data_dir=data_dir)
+    except FileNotFoundError:
+        HOTMART_STUDENTS_DF = pd.DataFrame()
+    
+    registros_iniciais = len(df_filtered)
+    
+    # === FILTRO POR EMAIL ===
+    if email_column in df_filtered.columns:
+        # Processa emails do DataFrame de entrada (trim + lowercase)
+        df_filtered[f'_processed_{email_column}'] = clean_and_lower_column(df_filtered, email_column)
+        
+        # Coleta emails de compradores (processados)
+        emails_to_filter = set()
+        for buyers_df in [GENERIC_BUYERS_DF, HOTMART_BUYERS_DF, TMB_BUYERS_DF, HOTMART_STUDENTS_DF]:
+            emails_to_filter.update(_extract_column_values(buyers_df, 'email', clean_and_lower_column))
+        
+        # Filtra
+        if emails_to_filter:
+            df_filtered = df_filtered[~df_filtered[f'_processed_{email_column}'].isin(emails_to_filter)]
+        
+        # Remove coluna temporária
+        df_filtered = df_filtered.drop(columns=[f'_processed_{email_column}'])
+    
+    # === FILTRO POR PHONE ===
+    if phone_column in df_filtered.columns:
+        # Processa phones do DataFrame de entrada (limpa e normaliza)
+        df_filtered[f'_processed_{phone_column}'] = process_phone_string(df_filtered, phone_column)
+        
+        # Coleta phones de compradores (processados)
+        phones_to_filter = set()
+        for buyers_df in [GENERIC_BUYERS_DF, TMB_BUYERS_DF]:
+            phones_to_filter.update(_extract_column_values(buyers_df, 'phone', process_phone_string))
+        
+        # Filtra
+        if phones_to_filter:
+            df_filtered = df_filtered[~df_filtered[f'_processed_{phone_column}'].isin(phones_to_filter)]
+        
+        # Remove coluna temporária
+        df_filtered = df_filtered.drop(columns=[f'_processed_{phone_column}'])
+    
+    # === FILTRO POR LEAD_ID ===
+    if lead_id_column in df_filtered.columns:
+        # Coleta lead_ids de compradores
+        lead_ids_to_filter = set()
+        if 'lead_id' in GENERIC_BUYERS_DF.columns:
+            lead_ids_to_filter.update(GENERIC_BUYERS_DF['lead_id'].dropna().tolist())
+        
+        # Filtra diretamente (sem conversão de tipo)
+        if lead_ids_to_filter:
+            df_filtered = df_filtered[~df_filtered[lead_id_column].isin(lead_ids_to_filter)]
+    
+    registros_removidos = registros_iniciais - len(df_filtered)
+    print(f"✓ Removidos {registros_removidos:,} compradores de {registros_iniciais:,} registros "
+          f"({registros_removidos/registros_iniciais*100:.1f}% filtrado)")
+    
+    return df_filtered
+
+
+def remover_leads_do_dataframe(
+    filtravel: pd.DataFrame,
+    filtros: Union[pd.DataFrame, List[pd.DataFrame]],
+    email_column: str = 'email',
+    phone_column: str = 'phone',
+    lead_id_column: str = 'lead_id'
+) -> pd.DataFrame:
+    """
+    Remove leads de um DataFrame baseado em um ou mais DataFrames de filtro.
+    
+    Filtra o DataFrame 'filtravel' removendo registros que correspondam
+    aos leads dos DataFrames de filtro por email, phone ou lead_id.
+    
+    Args:
+        filtravel: DataFrame a ser filtrado (A)
+        filtros: DataFrame ou lista de DataFrames com leads a serem removidos
+        email_column: Nome da coluna de email nos DataFrames
+        phone_column: Nome da coluna de telefone nos DataFrames
+        lead_id_column: Nome da coluna de lead_id nos DataFrames
+        
+    Returns:
+        DataFrame filtrado sem os leads presentes nos DataFrames de filtro
+        
+    Raises:
+        ValueError: Se nenhuma das colunas de filtro existir no DataFrame filtrável
+        
+    Example:
+        >>> df_leads = pd.DataFrame({
+        ...     'email': ['a@example.com', 'b@example.com', 'c@example.com'],
+        ...     'phone': ['11999999999', '11888888888', '11777777777'],
+        ...     'lead_id': [1, 2, 3]
+        ... })
+        >>> df_remover1 = pd.DataFrame({'email': ['b@example.com']})
+        >>> df_remover2 = pd.DataFrame({'lead_id': [3]})
+        >>> # Com um único DataFrame
+        >>> df_resultado = remover_leads_do_dataframe(df_leads, df_remover1)
+        >>> # Com múltiplos DataFrames
+        >>> df_resultado = remover_leads_do_dataframe(df_leads, [df_remover1, df_remover2])
+    """
+    # Normaliza para lista de DataFrames
+    if isinstance(filtros, pd.DataFrame):
+        lista_filtros = [filtros]
+    else:
+        lista_filtros = filtros
+    
+    # Validação: verifica se pelo menos uma coluna de filtro existe no DataFrame filtrável
+    available_columns = []
+    if email_column in filtravel.columns:
+        available_columns.append(email_column)
+    if phone_column in filtravel.columns:
+        available_columns.append(phone_column)
+    if lead_id_column in filtravel.columns:
+        available_columns.append(lead_id_column)
+    
+    if not available_columns:
+        raise ValueError(
+            f"Nenhuma das colunas de filtro encontrada no DataFrame filtrável. "
+            f"Esperado pelo menos uma de: '{email_column}', '{phone_column}', '{lead_id_column}'. "
+            f"Colunas disponíveis: {filtravel.columns.tolist()}"
+        )
+    
+    # Cria cópia para não modificar o original
+    df_filtered = filtravel.copy()
+    
+    registros_iniciais = len(df_filtered)
+    
+    # Coleta todos os valores de filtro de todos os DataFrames
+    emails_to_filter = set()
+    phones_to_filter = set()
+    lead_ids_to_filter = set()
+    
+    for filtro_df in lista_filtros:
+        if email_column in filtro_df.columns:
+            emails_to_filter.update(_extract_column_values(filtro_df, email_column, clean_and_lower_column))
+        if phone_column in filtro_df.columns:
+            phones_to_filter.update(_extract_column_values(filtro_df, phone_column, process_phone_string))
+        if lead_id_column in filtro_df.columns:
+            lead_ids_to_filter.update(filtro_df[lead_id_column].dropna().tolist())
+    
+    # === FILTRO POR EMAIL ===
+    if email_column in filtravel.columns and emails_to_filter:
+        # Processa emails do DataFrame de entrada (trim + lowercase)
+        df_filtered[f'_processed_{email_column}'] = clean_and_lower_column(df_filtered, email_column)
+        
+        # Filtra
+        df_filtered = df_filtered[~df_filtered[f'_processed_{email_column}'].isin(emails_to_filter)]
+        
+        # Remove coluna temporária
+        df_filtered = df_filtered.drop(columns=[f'_processed_{email_column}'])
+    
+    # === FILTRO POR PHONE ===
+    if phone_column in filtravel.columns and phones_to_filter:
+        # Processa phones do DataFrame de entrada (limpa e normaliza)
+        df_filtered[f'_processed_{phone_column}'] = process_phone_string(df_filtered, phone_column)
+        
+        # Filtra
+        df_filtered = df_filtered[~df_filtered[f'_processed_{phone_column}'].isin(phones_to_filter)]
+        
+        # Remove coluna temporária
+        df_filtered = df_filtered.drop(columns=[f'_processed_{phone_column}'])
+    
+    # === FILTRO POR LEAD_ID ===
+    if lead_id_column in filtravel.columns and lead_ids_to_filter:
+        # Filtra diretamente (sem conversão de tipo)
+        df_filtered = df_filtered[~df_filtered[lead_id_column].isin(lead_ids_to_filter)]
+    
+    registros_removidos = registros_iniciais - len(df_filtered)
+    print(f"✓ Removidos {registros_removidos:,} leads de {registros_iniciais:,} registros "
+          f"({registros_removidos/registros_iniciais*100:.1f}% filtrado)")
+    
+    return df_filtered
