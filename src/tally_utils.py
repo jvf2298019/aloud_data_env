@@ -270,59 +270,53 @@ class Tally:
     def get_form_submissions(
         self,
         form_id: str,
-        since: Optional[str] = None,
-        until: Optional[str] = None,
-        status: Optional[str] = None,
-        fields: Optional[List[str]] = None,
-        sort: str = 'desc',
-        limit: int = 100
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        filter_status: str = 'completed',
+        after_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Obtém submissões de um formulário com paginação automática.
-        
+
         Args:
             form_id: ID do formulário
-            since: Data inicial (ISO 8601 ou timestamp Unix)
-            until: Data final (ISO 8601 ou timestamp Unix)
-            status: Filtrar por status (ex: 'COMPLETED', 'IN_PROGRESS')
-            fields: Lista de campos específicos para retornar
-            sort: Ordenação ('asc' ou 'desc', padrão: 'desc')
-            limit: Número de resultados por página (max: 100)
-            
+            start_date: Data inicial (formato ISO 8601, ex: '2024-01-01T00:00:00Z')
+            end_date: Data final (formato ISO 8601, ex: '2024-12-31T23:59:59Z')
+            filter_status: Filtrar por status ('all', 'completed', 'partial'). Padrão: 'completed'
+            after_id: Obter submissões após um ID específico de submissão
+
         Returns:
             Lista com todas as submissões do formulário
-            
+
         Example:
             >>> tally = Tally()
             >>> submissoes = tally.get_form_submissions(
             ...     'abc123',
-            ...     since='2024-01-01',
-            ...     status='COMPLETED'
+            ...     start_date='2024-01-01T00:00:00Z',
+            ...     filter_status='completed'
             ... )
             >>> print(f"Total de submissões: {len(submissoes)}")
         """
         all_submissions: List[Dict[str, Any]] = []
         page = 1
-        after = None  # Cursor para paginação
-        
+        current_after_id = after_id  # Cursor para paginação
+
         try:
             while True:
-                # Preparar parâmetros
+                # Preparar parâmetros conforme documentação da API
+                # https://developers.tally.so/api-reference/endpoint/forms/submissions/list
                 params: Dict[str, Any] = {
-                    'limit': min(limit, 100),  # Máximo 100 por página
-                    'sort': sort
+                    'page': page
                 }
-                
-                if since:
-                    params['since'] = since
-                if until:
-                    params['until'] = until
-                if status:
-                    params['status'] = status
-                if fields:
-                    params['fields'] = ','.join(fields)
-                if after:
-                    params['after'] = after
+
+                if start_date:
+                    params['startDate'] = start_date
+                if end_date:
+                    params['endDate'] = end_date
+                # filter_status sempre tem valor (padrão: 'completed')
+                params['filter'] = filter_status
+                if current_after_id:
+                    params['afterId'] = current_after_id
                 
                 # Mostrar progresso
                 sys.stdout.write(
@@ -339,14 +333,14 @@ class Tally:
                 )
                 data = response.json()
                 
-                # Extrair submissões
+                # Extrair submissões conforme estrutura da API
+                # Resposta: { page, limit, hasMore, totalNumberOfSubmissionsPerFilter, questions, submissions }
                 if isinstance(data, dict):
-                    submissions = data.get('data', [])
-                    pagination = data.get('pagination', {})
-                    after = pagination.get('after')
+                    submissions = data.get('submissions', [])
+                    has_more = data.get('hasMore', False)
                 else:
                     submissions = data if isinstance(data, list) else []
-                    after = None
+                    has_more = False
                 
                 all_submissions.extend(submissions)
                 logger.info(
@@ -355,7 +349,7 @@ class Tally:
                 )
                 
                 # Verificar se há mais páginas
-                if not after or not submissions:
+                if not has_more or not submissions:
                     sys.stdout.write(
                         f"\r✓ Concluído: {page} página(s) processada(s). "
                         f"Total de {len(all_submissions)} submissões obtidas.\n"
@@ -877,3 +871,5 @@ def get_tally_client() -> Tally:
         >>> forms = tally.get_forms()
     """
     return Tally()
+
+

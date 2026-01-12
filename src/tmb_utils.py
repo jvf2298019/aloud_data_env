@@ -180,15 +180,25 @@ class TMB:
                 else:
                     items = data.get('data', [])
                 
+                # Extrair metadados de paginação da resposta (se disponíveis)
+                total_pages = data.get('totalPages') if isinstance(data, dict) else None
+                api_page_number = data.get('pageNumber') if isinstance(data, dict) else None
+                
                 if not items:
                     break
                 
                 all_pedidos.extend(items)
                 logger.info("Obtidos %s pedidos. Total: %s", len(items), len(all_pedidos))
                 
-                # Verificar se há mais páginas
-                if len(items) < page_size:
-                    break
+                # Verificar se há mais páginas usando metadados da API
+                if total_pages is not None and api_page_number is not None:
+                    # Usar informação de paginação da resposta da API
+                    if api_page_number >= total_pages:
+                        break
+                else:
+                    # Fallback: usar comparação com tamanho da página
+                    if len(items) < page_size:
+                        break
                 
                 current_page += 1
                 

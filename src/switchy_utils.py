@@ -123,27 +123,37 @@ class SwitchyAPI:
         if fields is None:
             fields = ['id', 'title', 'url', 'extraOptionsLinkRotator']
         
-        fields_str = '\n        '.join(fields)
+        fields_str = '\n      '.join(fields)
         
-        query_parts = ["query GetLinks"]
-        
-        # Montar a query com parâmetros opcionais
-        where_clause = ""
+        # Montar argumentos da query dinamicamente
+        args = []
         if filters:
-            query_parts[0] += "($where: links_bool_exp!)"
-            where_clause = "where: $where, "
-        
-        query_parts.append("{")
-        query_parts.append(f"  links({where_clause}limit: {limit}, offset: {offset}")
-        
+            args.append("where: $where")
+        if limit is not None:
+            args.append(f"limit: {limit}")
+        if offset:
+            args.append(f"offset: {offset}")
         if order_by:
             order_str = ", ".join([f"{k}: {v}" for k, v in order_by.items()])
-            query_parts[-1] += f", order_by: {{{order_str}}}"
+            args.append(f"order_by: {{{order_str}}}")
         
-        query_parts[-1] += ") {"
-        query_parts.append(f"    {fields_str}")
-        query_parts.append("  }")
-        query_parts.append("}")
+        args_str = ", ".join(args)
+        
+        # Montar a query com sintaxe GraphQL correta
+        query_header = "query GetLinks"
+        if filters:
+            query_header += "($where: links_bool_exp!)"
+        
+        # Montar links com ou sem parênteses dependendo se há argumentos
+        links_line = f"  links({args_str}) {{" if args_str else "  links {"
+        
+        query_parts = [
+            f"{query_header} {{",
+            links_line,
+            f"      {fields_str}",
+            "  }",
+            "}"
+        ]
         
         query = "\n".join(query_parts)
         

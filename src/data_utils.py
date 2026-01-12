@@ -540,6 +540,11 @@ def remove_buyers_from_dataframe(
     except FileNotFoundError:
         HOTMART_STUDENTS_DF = pd.DataFrame()
     
+    try:
+        TMB_PEDIDOS_DF = load_raw_data('tmb_pedidos_data.csv', data_dir=data_dir)
+    except FileNotFoundError:
+        TMB_PEDIDOS_DF = pd.DataFrame()
+    
     registros_iniciais = len(df_filtered)
     
     # === FILTRO POR EMAIL ===
@@ -549,7 +554,7 @@ def remove_buyers_from_dataframe(
         
         # Coleta emails de compradores (processados)
         emails_to_filter = set()
-        for buyers_df in [GENERIC_BUYERS_DF, HOTMART_BUYERS_DF, TMB_BUYERS_DF, HOTMART_STUDENTS_DF]:
+        for buyers_df in [GENERIC_BUYERS_DF, HOTMART_BUYERS_DF, TMB_BUYERS_DF, HOTMART_STUDENTS_DF, TMB_PEDIDOS_DF]:
             emails_to_filter.update(_extract_column_values(buyers_df, 'email', clean_and_lower_column))
         
         # Filtra
@@ -568,6 +573,8 @@ def remove_buyers_from_dataframe(
         phones_to_filter = set()
         for buyers_df in [GENERIC_BUYERS_DF, TMB_BUYERS_DF]:
             phones_to_filter.update(_extract_column_values(buyers_df, 'phone', process_phone_string))
+        # TMB_PEDIDOS_DF usa coluna 'telefone' em vez de 'phone'
+        phones_to_filter.update(_extract_column_values(TMB_PEDIDOS_DF, 'telefone', process_phone_string))
         
         # Filtra
         if phones_to_filter:
