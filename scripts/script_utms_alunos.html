@@ -1,0 +1,61 @@
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  console.log("🟢 Script de UTMs iniciado.");
+
+  // Função para pegar as UTMs da URL
+  function getUTMs() {
+    const params = new URLSearchParams(window.location.search);
+    const utmKeys = ["utm_source", "utm_campaign", "utm_content", "utm_medium", "campaign_id"];
+    const utms = {};
+    utmKeys.forEach(key => {
+      const value = params.get(key);
+      if (value) utms[key] = value;
+    });
+    return utms;
+  }
+
+  const utms = getUTMs();
+
+  if (Object.keys(utms).length === 0) {
+    console.log("⚪ Nenhuma UTM encontrada na URL.");
+    return;
+  }
+
+  console.log("🔹 UTMs detectadas:", utms);
+
+  // Monta o valor do sck no formato solicitado
+  const sckValue = [
+    `utm_source=${encodeURIComponent(utms.utm_source || "")}`,
+    `utm_campaign=${encodeURIComponent(utms.utm_campaign || "")}`,
+    `utm_content=${encodeURIComponent(utms.utm_content || "")}`,
+    `utm_medium=${encodeURIComponent(utms.utm_medium || "")}`,
+    `campaign_id=${encodeURIComponent(utms.campaign_id || "lcto-bf25-alunos")}`
+  ].join("%26");
+
+  console.log("🧩 Valor final de sck:", sckValue);
+
+  // Seleciona todos os links da Hotmart
+  const hotmartLinks = Array.from(document.querySelectorAll("a[href*='pay.hotmart']"));
+
+  if (hotmartLinks.length === 0) {
+    console.log("⚪ Nenhum link contendo 'pay.hotmart' encontrado na página.");
+    return;
+  }
+
+  console.log(`🔍 ${hotmartLinks.length} link(s) Hotmart encontrado(s). Atualizando...`);
+
+  hotmartLinks.forEach((link, i) => {
+    const originalHref = link.href;
+    const url = new URL(originalHref);
+    url.searchParams.delete("sck");
+    url.searchParams.set("sck", sckValue);
+    link.href = url.toString();
+
+    console.log(`✅ [${i + 1}] Link atualizado:`);
+    console.log("   Original:", originalHref);
+    console.log("   Novo:", link.href);
+  });
+
+  console.log("🏁 Atualização de UTMs concluída com sucesso.");
+});
+</script>
