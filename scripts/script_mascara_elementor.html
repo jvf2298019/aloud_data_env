@@ -1,0 +1,244 @@
+<!-- intl-tel-input CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.min.css" />
+<!-- intl-tel-input JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/intlTelInput.min.js"></script>
+<!-- Utils para formatar E.164 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.js"></script>
+
+<script>
+(function() {
+    console.log("✅ Script intl-tel-input Elementor inicializado.");
+
+    // IDs dos campos extras (para validação)
+    const FIELD_PHONE_COUNTRY_FLAG = 402;
+    const FIELD_PHONE_DDI = 403;
+    const FIELD_RAW_PHONE = 401;
+
+    console.log("📦 IDs dos campos ocultos:");
+    console.log(" - FIELD_PHONE_COUNTRY_FLAG:", FIELD_PHONE_COUNTRY_FLAG);
+    console.log(" - FIELD_PHONE_DDI:", FIELD_PHONE_DDI);
+    console.log(" - FIELD_RAW_PHONE:", FIELD_RAW_PHONE);
+
+    // Função para garantir a criação dos campos ocultos
+    function ensureHiddenField(form, fieldId, fieldName) {
+        let selector = `input[name="${fieldName}"]`;
+        let el = form.querySelector(selector);
+        if (!el) {
+            el = document.createElement("input");
+            el.type = "hidden";
+            el.name = fieldName;
+            form.appendChild(el);
+            console.log(`🆕 Campo oculto criado: ${fieldName} (ID ${fieldId})`);
+        } else {
+            console.log(`ℹ️ Campo oculto já existe: ${fieldName}`);
+        }
+        return el;
+    }
+
+    // Máscaras e placeholders
+    const maskMap = {
+        'br': '(00) 00000-0000',
+        'us': '(000) 000-0000',
+        'pt': '000 000 000',
+        'gb': '00000 000000',
+        'ie': '000 000 0000',
+        'ca': '(000) 000-0000',
+        'es': '000 000 000',
+        'jp': '000-0000-0000',
+        'au': '0000 000 000',
+        'it': '000 000 0000',
+        'de': '0000 0000000',
+        'vi': '(000) 000-0000',
+        'be': '000 00 00 00',
+        'nl': '000 000 0000',
+        'fr': '00 00 00 00 00',
+        'ar': '00 0000-0000',
+        'ae': '000 000 0000',
+        'af': '000 000 0000'
+    };
+
+    const placeholderMap = {
+        br: '(11) 98765-4321',
+        us: '(202) 555-0199',
+        pt: '912 345 678',
+        gb: '07123 456789',
+        ie: '085 123 4567',
+        ca: '(416) 555-0133',
+        es: '612 345 678',
+        jp: '090-1234-5678',
+        au: '0412 345 678',
+        it: '347 123 4567',
+        de: '1512 3456789',
+        vi: '(340) 555-0123',
+        be: '470 12 34 56',
+        nl: '061 234 5678',
+        fr: '06 12 34 56 78',
+        ar: '11 2345-6789',
+        ae: '050 123 4567',
+        af: '070 123 4567'
+    };
+
+    function maskNumber(val, mask) {
+        const clean = val.replace(/\D/g, '');
+        let newVal = '';
+        let maskIdx = 0, cleanIdx = 0;
+        while (maskIdx < mask.length && cleanIdx < clean.length) {
+            newVal += mask[maskIdx] === '0' ? clean[cleanIdx++] : mask[maskIdx];
+            maskIdx++;
+        }
+        return newVal;
+    }
+
+    // Inicializa campo de telefone
+    function initPhoneFields(context) {
+        const phoneFields = context.querySelectorAll('#form-field-phone');
+        if (!phoneFields.length) {
+            console.log("⚠️ Nenhum campo #form-field-phone encontrado neste contexto.");
+            return;
+        }
+
+        console.log(`📞 Encontrados ${phoneFields.length} campos de telefone.`);
+
+        phoneFields.forEach(input => {
+            if (input.dataset.itiInitialized === "true") {
+                console.log("⏩ Campo já inicializado, pulando:", input);
+                return;
+            }
+
+            const iti = window.intlTelInput(input, {
+                separateDialCode: true,
+                preferredCountries: ["br", "us", "pt", "gb", "ie", "ca", "es", "jp", "au", "it", "de"],
+                initialCountry: "br",
+                utilsScript: "//cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.js"
+            });
+
+            input.dataset.itiInitialized = "true";
+
+            let country = iti.getSelectedCountryData().iso2;
+            input.placeholder = placeholderMap[country] || '';
+            console.log(`✅ Campo de telefone inicializado com país ${country.toUpperCase()} (${iti.getSelectedCountryData().dialCode})`);
+
+            // máscara dinâmica
+            input.addEventListener('input', function() {
+                const ctry = iti.getSelectedCountryData().iso2;
+                const mask = maskMap[ctry];
+                input.value = mask ? maskNumber(input.value, mask) : input.value.replace(/\D/g, '');
+            });
+
+            // troca de país
+            input.addEventListener('countrychange', function() {
+                setTimeout(() => {
+                    input.value = '';
+                    const newCtry = iti.getSelectedCountryData().iso2;
+                    input.placeholder = placeholderMap[newCtry] || '';
+                    console.log(`🌎 País alterado: ${newCtry.toUpperCase()}`);
+                }, 30);
+            });
+
+            // validação no submit
+            const form = input.closest("form");
+            form.addEventListener("submit", function(e) {
+                const fullNumber = iti.getNumber(intlTelInputUtils.numberFormat.E164);
+                const isValid = iti.isValidNumber();
+                const errorCode = iti.getValidationError();
+
+                console.log("📤 Enviando formulário...");
+                console.log("   Número digitado:", input.value);
+                console.log("   Formato E.164:", fullNumber);
+                console.log("   Validação:", isValid ? "✅ Válido" : "❌ Inválido");
+                console.log("   Código de erro:", errorCode);
+
+                if (!isValid || errorCode !== 0) {
+                    e.preventDefault();
+                    alert("Número inválido.");
+                    return false;
+                }
+
+                if (iti.getSelectedCountryData().iso2 === "br") {
+                    const digitsBR = fullNumber.replace(/\D/g, '').replace(/^55/, '');
+                    if (digitsBR.length < 10) {
+                        e.preventDefault();
+                        alert("Número de telefone muito curto para o Brasil.");
+                        return false;
+                    }
+                }
+
+                input.value = fullNumber;
+
+                const sel = iti.getSelectedCountryData();
+                const iso2 = sel?.iso2 || '';
+                const ddi = sel?.dialCode || '';
+
+                const numeroDigits = (input.value || '').replace(/\D/g, '');
+                const numeroSemDdi = numeroDigits.startsWith(ddi)
+                    ? numeroDigits.substring(ddi.length)
+                    : numeroDigits;
+
+                console.log("📦 Dados capturados:");
+                console.log("   ISO2:", iso2);
+                console.log("   DDI:", ddi);
+                console.log("   Número sem DDI:", numeroSemDdi);
+
+                ensureHiddenField(form, FIELD_PHONE_COUNTRY_FLAG, "field[" + FIELD_PHONE_COUNTRY_FLAG + "]").value = iso2;
+                ensureHiddenField(form, FIELD_PHONE_DDI, "field[" + FIELD_PHONE_DDI + "]").value = ddi;
+                ensureHiddenField(form, FIELD_RAW_PHONE, "field[" + FIELD_RAW_PHONE + "]").value = numeroSemDdi;
+
+                console.log("✅ Campos ocultos atualizados no submit.");
+            });
+        });
+    }
+
+    // Escuta o evento de exibição do popup do Elementor
+    jQuery(window).on('elementor/popup/show', function(event, id, instance) {
+        console.log(`💡 Popup do Elementor aberto (ID: ${id})`);
+        const popup = document.querySelector('.elementor-popup-modal');
+        if (popup) {
+            console.log("🔍 Iniciando campos dentro do popup...");
+            initPhoneFields(popup);
+        } else {
+            console.warn("⚠️ Popup não encontrado no DOM.");
+        }
+    });
+
+})();
+</script>
+
+<style>
+/* Estilos do campo de telefone e dropdown */
+.iti, .iti--allow-dropdown {
+  width: 100% !important;
+  z-index: 9999 !important;
+}
+.iti__country-list {
+  color: #F9F9F9 !important;
+  background-color: #1A1A1A !important;
+  border-color: #1A1A1A !important;
+}
+.iti__selected-flag {
+  background-color: #280017 !important;
+}
+.iti__country-list,
+.iti__country-name,
+.iti__dial-code {
+  color: #FFFFFF !important;
+}
+.iti__country-list {
+  background-color: #0D260C !important;
+  border-color: #0D260C !important;
+}
+.iti__arrow {
+  border-top-color: #FFFFFF !important;
+}
+.iti__country.iti__highlight,
+.iti__country.iti__active {
+  background-color: #162B15 !important;
+  color: #FFFFFF !important;
+}
+.iti__selected-dial-code {
+  color: #FFFFFF !important;
+}
+.iti__selected-flag {
+  background-color: #0D260C !important;
+}
+</style>
+ 
