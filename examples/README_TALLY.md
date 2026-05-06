@@ -177,7 +177,7 @@ for wh in webhooks:
 tally.update_webhook(
     webhook_id='webhook_id',
     url='https://nova-url.com/webhook',
-    enabled=True
+    is_enabled=True
 )
 ```
 
