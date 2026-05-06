@@ -18,10 +18,12 @@ statsmodels>=0.14.0
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
 pymysql>=1.1.0
+pymongo>=4.6.0
 
 # APIs e requisições
 requests>=2.31.0
 httpx>=0.24.0
+aiohttp>=3.9.0
 
 # Utilitários
 python-dotenv>=1.0.0

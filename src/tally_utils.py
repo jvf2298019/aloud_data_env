@@ -193,6 +193,20 @@ class Tally:
                             "Rate limit excedido após múltiplas tentativas"
                         )
                 
+                # Log detalhado em 401 (autenticação) para diagnóstico
+                if response.status_code == 401:
+                    try:
+                        err_body = response.json()
+                        logger.error(
+                            "401 Unauthorized. Verifique TALLY_API_KEY em https://tally.so/settings/api-keys. "
+                            "Resposta: %s", err_body
+                        )
+                    except Exception:
+                        logger.error(
+                            "401 Unauthorized. Verifique TALLY_API_KEY em https://tally.so/settings/api-keys. "
+                            "Token deve começar com 'tly-'"
+                        )
+                
                 # Verificar sucesso
                 response.raise_for_status()
                 return response
@@ -626,24 +640,24 @@ class Tally:
     def update_webhook(
         self,
         webhook_id: str,
+        form_id: Optional[str] = None,
         url: Optional[str] = None,
         event_types: Optional[List[str]] = None,
+        is_enabled: Optional[bool] = None,
         signing_secret: Optional[str] = None,
-        http_headers: Optional[List[Dict[str, str]]] = None,
-        external_subscriber: Optional[str] = None,
-        enabled: Optional[bool] = None
+        http_headers: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
-        Atualiza um webhook existente.
+        Atualiza um webhook existente (PATCH /webhooks/{webhookId}).
         
         Args:
             webhook_id: ID do webhook
-            url: Nova URL do endpoint
-            event_types: Novos tipos de eventos
-            signing_secret: Novo segredo de assinatura
-            http_headers: Novos headers customizados
-            external_subscriber: Novo identificador externo
-            enabled: Ativar/desativar webhook
+            form_id: ID do formulário associado
+            url: URL do endpoint
+            event_types: Tipos de eventos (ex: ["FORM_RESPONSE"])
+            is_enabled: Ativar/desativar webhook
+            signing_secret: Segredo de assinatura
+            http_headers: Headers HTTP customizados [{"name": "...", "value": "..."}]
             
         Returns:
             Dicionário com dados do webhook atualizado
@@ -653,33 +667,55 @@ class Tally:
             >>> webhook = tally.update_webhook(
             ...     webhook_id='webhook_abc123',
             ...     url='https://novosite.com/webhook',
-            ...     enabled=True
+            ...     event_types=['FORM_RESPONSE'],
+            ...     is_enabled=True
             ... )
         """
         try:
             logger.info("Atualizando webhook %s...", webhook_id)
             
-            # Preparar payload apenas com campos fornecidos
-            payload: Dict[str, Any] = {}
+            # PATCH exige formId, url, eventTypes, isEnabled (doc: developers.tally.so)
+            # GET /webhooks/{id} não existe na API - usar list_webhooks para obter dados atuais
+            current: Dict[str, Any] = {}
+            page = 1
+            while True:
+                list_data = self.list_webhooks(page=page, limit=100)
+                for w in list_data.get('webhooks', []):
+                    if w.get('id') == webhook_id:
+                        current = w
+                        break
+                if current or not list_data.get('hasMore', False):
+                    break
+                page += 1
+            if not current:
+                raise TallyAPIError(
+                    f"Webhook {webhook_id} não encontrado na lista. "
+                    "Verifique se o ID está correto e se você tem acesso."
+                )
             
-            if url is not None:
-                payload['url'] = url
-            if event_types is not None:
-                payload['eventTypes'] = event_types
+            payload: Dict[str, Any] = {
+                'formId': form_id if form_id is not None else current.get('formId'),
+                'url': url if url is not None else current.get('url'),
+                'eventTypes': event_types if event_types is not None else current.get('eventTypes', ['FORM_RESPONSE']),
+                'isEnabled': is_enabled if is_enabled is not None else current.get('isEnabled', True),
+            }
             if signing_secret is not None:
                 payload['signingSecret'] = signing_secret
+            elif current.get('signingSecret'):
+                payload['signingSecret'] = current['signingSecret']
             if http_headers is not None:
                 payload['httpHeaders'] = http_headers
-            if external_subscriber is not None:
-                payload['externalSubscriber'] = external_subscriber
-            if enabled is not None:
-                payload['enabled'] = enabled
+            elif current.get('httpHeaders'):
+                payload['httpHeaders'] = current['httpHeaders']
             
             response = self.make_request(
                 f'/webhooks/{webhook_id}',
-                method='PUT',
+                method='PATCH',
                 json_data=payload
             )
+            # PATCH retorna 204 No Content conforme a doc
+            if response.status_code == 204:
+                return {**current, **payload}
             data = response.json()
             
             logger.info("✓ Webhook %s atualizado", webhook_id)

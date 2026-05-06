@@ -218,3 +218,10 @@ airflow.db
 airflow.cfg
 logs/
 
+
+# Tooling configs locais
+.claude/
+.cursor/
+
+# State files
+scripts/imported_leads.json
